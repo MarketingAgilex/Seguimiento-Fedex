@@ -92,6 +92,14 @@ td a{color:var(--navy);font-weight:600}
 .note.show{display:block}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
+.rfilters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px}
+.rfilters label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.rfilters select{min-width:150px;max-width:220px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;outline:none}
+.rfilters select:focus{border-color:var(--navy)}
+.btn.line{background:var(--surface);color:var(--navy);border:1px solid var(--border)}
+.kpis.k5{grid-template-columns:repeat(5,1fr)}
+.kpi .value.money{font-size:22px}
+@media (max-width:980px){.kpis.k5{grid-template-columns:repeat(2,1fr)}}
 #gate{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-left,0px));background:radial-gradient(120% 140% at 85% 0%,#4a4b8c 0%,var(--navy) 38%,var(--navy-dd) 100%)}
 #gate form{background:#fff;border-radius:18px;padding:28px 26px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px #0004}
 #gate img{height:38px;align-self:flex-start}
@@ -220,6 +228,49 @@ footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
     <div class="card"><h3>Guías por rango de peso</h3><p class="hint">Cómo se reparte la carga</p><div class="chart"><canvas id="cPeso"></canvas></div></div>
   </div>
 
+  <section id="rec">
+  <div class="section-title"><h2>Reclamaciones</h2><span id="recRange">Reporte de reclamaciones 2026 · todos los operadores</span></div>
+  <div class="note" id="recNote"></div>
+  <div class="rfilters" id="recFilters">
+    <label>Operador<select id="rOper"></select></label>
+    <label>Mes de reclamación<select id="rMes"></select></label>
+    <label>País Ágilex<select id="rPais"></select></label>
+    <label>Motivo<select id="rMot"></select></label>
+    <label>Equipo<select id="rEq"></select></label>
+    <button class="btn line" id="rReset" type="button">Limpiar filtros</button>
+  </div>
+  <div class="kpis k5">
+    <div class="kpi accent"><div class="label">Reclamos</div><div class="value" id="rK1">–</div><div class="sub" id="rK1s"></div></div>
+    <div class="kpi"><div class="label">Tasa FedEx del mes</div><div class="value" id="rK2">–</div><div class="sub" id="rK2s"></div></div>
+    <div class="kpi"><div class="label">Valor a indemnizar</div><div class="value money" id="rK3">–</div><div class="sub" id="rK3s"></div></div>
+    <div class="kpi"><div class="label">Valor pagado</div><div class="value money" id="rK4">–</div><div class="sub" id="rK4s"></div></div>
+    <div class="kpi"><div class="label">Pendientes con operador</div><div class="value" id="rK5">–</div><div class="sub" id="rK5s"></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Reclamos por mes</h3><p class="hint">Según el mes de inicio de la reclamación, por operador</p><div class="chart"><canvas id="rcMes"></canvas></div></div>
+    <div class="card"><h3>Motivos de reclamación</h3><p class="hint">Número de reclamos por motivo</p><div class="chart"><canvas id="rcMot"></canvas></div></div>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><h3>Reclamos por operador</h3><p class="hint">Volumen y valor a indemnizar</p><div class="chart"><canvas id="rcOper"></canvas></div></div>
+    <div class="card"><h3>Estado Ágilex</h3><p class="hint">Situación del caso frente al cliente</p><div class="chart"><canvas id="rcEst"></canvas></div></div>
+    <div class="card"><h3>Estado con el operador</h3><p class="hint">Gestión del reclamo ante FedEx y demás operadores</p><div class="chart"><canvas id="rcOpEst"></canvas></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Dinero por mes</h3><p class="hint">Valor a indemnizar frente a valor pagado (COP)</p><div class="chart"><canvas id="rcDin"></canvas></div></div>
+    <div class="card">
+      <div class="toolbar"><div><h3>Reclamos por ejecutivo</h3><p class="hint" style="margin:0">Haz clic en un encabezado para ordenar</p></div></div>
+      <div class="tbl-wrap" style="max-height:300px"><table id="rtEje"></table></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="toolbar">
+      <div><h3>Casos abiertos</h3><p class="hint" style="margin:0">Pendientes con el operador o con pago sin cerrar, del más antiguo al más reciente</p></div>
+      <input type="search" id="qRec" placeholder="Buscar guía, cliente, ejecutivo…">
+    </div>
+    <div class="tbl-wrap"><table id="rtAb"></table></div>
+  </div>
+  </section>
+
   <footer id="foot">Fuente: Reporte de seguimiento FedEx (Google Sheets), pestaña del mes en curso. Los días de tránsito excluyen fines de semana, no festivos.</footer>
 </main>
 
@@ -229,8 +280,10 @@ footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
    Archivo › Compartir › Publicar en la web › Todo el documento › Microsoft Excel (.xlsx) › Publicar */
 /* El enlace de la hoja va cifrado con la clave de acceso (AES-GCM, clave derivada con PBKDF2).
    Sin la clave correcta el enlace no se puede recuperar desde el código de la página. */
-const SHEET_ENC = "7/BBay4DQnmWdfYELFjImw==.idMO8BC+k1rWWdbC.qAtN8Cdn5zB92NoFpy4hNth2KexaesEmyfp/HCmRUpeP9unmjpmhyMDRTqCujF/3XziqdKry2JTzlnBQN95emy6SCitem9kk2DcwDVP1aWq1YcLhYx+HQROzEnQDrigRc+FLF0fWiVv+PLi8fi8e3IVk9mTqIoO+ovBqqfNy6TpQWM5Ponfeubr/6Uh2X/XbsgeYB6kE9qib77K5vfTV";
+const SHEET_ENC = "gGXAzSGC06thH+lsHDSM7w==.LS8aPn3U9sMYffty.YzHxE4InNWm9bJZU3ToMP8ozucrMlbxCmmZmKzqykfsq88wBFMuK6bfbAzJ9wTZ7QN76zXPdvnci/20FSW7lwI9CokCyUPviXotYpQvQ5KkmkUHNf8uAXIrg0FCMgr48Ne3pHpmwGVKnsIc689c+4j+KTHHRSpof6N0S166BpJwrKhmgvl57F6/kAbIzBbu4g+c6pbsKpc/GUC+v9gRK";
 let SHEET_URL = "";
+const RECLAMOS_ENC = "4eljKSlLikbn/ei1kUWf5A==.tJ4AgdW7cOQknxPD.Tx2/z6fyKVEdGoG/ExSuVHz6vqxMKl22ftwns8oLVGUwRpovxGeImr4u7auDAZyQiaxIYQjKBPRxsxY5CR2+jrrOusLBkng5PL013Ow4c9jMDbCSfT5tWZHpxfaKpUi43o5f8R2r4ojbXv0JCX1bA7cUXbZO30Eqof7XhmacERiAHPBZi962rplpDtBDhgwuyUL5d1tZoz+zGMeX9IUH";
+let RECLAMOS_URL = "";
 const TRANSITO_NORMAL = 5;   // días hábiles
 /* Pestaña del libro que alimenta el tablero (se compara sin tildes ni mayúsculas).
    Para cambiar de mes, escribe aquí el nombre exacto de la nueva pestaña. */
@@ -561,13 +614,149 @@ function renderDias(rows){
     options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf1.format(c.parsed.x)} días · ${nf1.format(ok[c.dataIndex])}% dentro de ${TRANSITO_NORMAL} días`}}},scales:{x:{...gridY,suggestedMax:TRANSITO_NORMAL+1,ticks:{precision:1}},y:{...noGrid,ticks:{autoSkip:false}}}}});
 }
 
+/* ====== Reclamaciones ====== */
+let REC=[];
+const nfCOP=new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0});
+const shortCOP=v=>{const a=Math.abs(v); return a>=1e9?'$'+nf1.format(v/1e9)+' mil M':a>=1e6?'$'+nf1.format(v/1e6)+' M':nfCOP.format(v);};
+const MES_IDX=Object.fromEntries(MESES.map((m,i)=>[m,i]));
+const MES3={ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,sept:8,oct:9,nov:10,dic:11};
+function money(v){ if(typeof v==='number') return v; const s=String(v||'').replace(/[^0-9,.\-]/g,''); if(!s) return 0;
+  // Formato del reporte: $1,470,000 (comas de miles) ; también acepta 1.470.000
+  const n=/,\d{3}(\D|$)/.test(s)&&!/\.\d{3}(\D|$)/.test(s)?s.replace(/,/g,''):s.replace(/\./g,'').replace(',','.'); const x=parseFloat(n); return isFinite(x)?x:0; }
+function toDateDM(v){
+  if(v instanceof Date||typeof v==='number') return toDate(v);
+  const s=norm(v); let m;
+  if((m=s.match(/^(\d{1,2})[-\/. ]([a-z]{3,4})[a-z]*[-\/. ](\d{2,4})$/))&&MES3[m[2]]!=null){ let y=+m[3]; if(y<100)y+=2000; return new Date(y,MES3[m[2]],+m[1]); }
+  if((m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/))){ let y=+m[3]; if(y<100)y+=2000; let d=+m[1],mo=+m[2]; if(mo>12){[d,mo]=[mo,d];} return new Date(y,mo-1,d); }
+  return toDate(v);
+}
+const RCOLS={pais:h=>h.startsWith('agilex pais'),ini:h=>h.startsWith('fecha inicio'),anio:h=>h==='ano'||h==='año',mes:h=>h.startsWith('mes reclam'),guia:h=>h==='guia',
+  oper:h=>h==='operador',dest:h=>h==='destino',cli:h=>h==='cliente',eje:h=>h.startsWith('ejecutivo'),eq:h=>h==='equipo',mot:h=>h.startsWith('motivo'),desc:h=>h.startsWith('descripcion'),
+  ind:h=>h==='valor a indemnizar cop',indUsd:h=>h==='valor a indemnizar usd',estA:h=>h.startsWith('estado agilex'),proc:h=>h.startsWith('procede'),estP:h=>h.startsWith('estado de pago'),
+  pag:h=>h==='valor pagado',mesPag:h=>h.startsWith('mes de pago'),estO:h=>h==='estado operador',sol:h=>h.startsWith('solucion operador'),gest:h=>h.startsWith('gestion realizada'),act:h=>h.startsWith('fecha actualizacion')};
+function parseReclamos(wb){
+  const name=wb.SheetNames.find(n=>norm(n).startsWith('reporte'))||wb.SheetNames[0];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
+  const hi=rows.findIndex(r=>r.map(norm).some(h=>h.startsWith('motivo')));
+  if(hi<0) return [];
+  const H=rows[hi].map(norm), map={};
+  H.forEach((h,i)=>{for(const k in RCOLS){ if(map[k]==null&&h&&RCOLS[k](h)){map[k]=i;break;} }});
+  const out=[];
+  rows.slice(hi+1).forEach(r=>{
+    const g=k=>map[k]!=null?r[map[k]]:'';
+    const oper=String(g('oper')).trim(), mot=String(g('mot')).trim();
+    if(!oper&&!mot&&!String(g('guia')).trim()) return;
+    const ini=toDateDM(g('ini'));
+    let anio=parseInt(g('anio')); if(!(anio>=2000)) anio=ini?ini.getFullYear():null; const mi=MES_IDX[norm(g('mes'))];
+    const mes=(anio&&mi!=null)?`${anio}-${String(mi+1).padStart(2,'0')}`:mesKey(ini);
+    const estO=String(g('estO')).trim().toUpperCase(), estP=String(g('estP')).trim().toUpperCase(), proc=String(g('proc')).trim().toUpperCase();
+    const pagado=estP==='PAGADO';
+    const pendOper=/PENDIENTE/.test(estO);
+    const pendPago=proc==='SI'&&!pagado;
+    out.push({ini,mes,guia:String(g('guia')).replace(/\.0+$/,'').trim(),oper:oper?titleCase(oper).replace(/^Fedex$/,'FedEx').replace(/^Usps$/,'USPS').replace(/^Agilplus$/,'ÁgilPlus'):'Sin operador',
+      pais:titleCase(String(g('pais')).trim())||'–',dest:String(g('dest')).trim().toUpperCase(),cli:String(g('cli')).trim(),eje:titleCase(String(g('eje')).trim())||'Sin ejecutivo',
+      eq:titleCase(String(g('eq')).trim())||'Sin equipo',mot:mot?cap(mot.toLowerCase()):'Sin motivo',desc:String(g('desc')).trim(),
+      ind:money(g('ind')),pag:money(g('pag')),estA:String(g('estA')).trim()?cap(String(g('estA')).trim().toLowerCase()):'Sin estado',
+      estO:estO?cap(estO.toLowerCase()):'Sin registrar',estP,proc,pagado,pendOper,pendPago,abierto:pendOper||pendPago,
+      gest:String(g('gest')).trim()||String(g('sol')).trim(),act:toDateDM(g('act'))});
+  });
+  return out;
+}
+function recFiltered(){
+  const f={oper:$('rOper').value,mes:$('rMes').value,pais:$('rPais').value,mot:$('rMot').value,eq:$('rEq').value};
+  return REC.filter(d=>Object.entries(f).every(([k,v])=>!v||d[k]===v));
+}
+function buildRecFilters(){
+  const uniq=k=>[...new Set(REC.map(d=>d[k]))].filter(Boolean);
+  opts($('rOper'),countBy(REC,'oper').map(e=>e[0]),'Todos los operadores');
+  opts($('rMes'),uniq('mes').sort().reverse(),'Todos los meses',mesLabel);
+  opts($('rPais'),uniq('pais').sort(),'Todos los países');
+  opts($('rMot'),countBy(REC,'mot').map(e=>e[0]),'Todos los motivos');
+  opts($('rEq'),uniq('eq').sort(),'Todos los equipos');
+}
+const OPCOL=['#393a70','#fcb614','#8e90c4','#1baf7a','#e2729d','#e8833a','#25264f','#c9cbdb'];
+let ejeSort={k:'n',dir:-1};
+function renderRec(){
+  if(!REC.length) return;
+  const rows=recFiltered(), n=rows.length;
+  const ind=rows.reduce((s,r)=>s+r.ind,0), pag=rows.reduce((s,r)=>s+r.pag,0);
+  const pendO=rows.filter(r=>r.pendOper).length, pendP=rows.filter(r=>r.pendPago).length;
+  $('rK1').textContent=nf.format(n);
+  const topMot=countBy(rows,'mot')[0];
+  $('rK1s').textContent=topMot?`Motivo principal: ${topMot[0]} (${nf1.format(pct(topMot[1],n))}%)`:'';
+  // Tasa: reclamos FedEx iniciados en el/los mes(es) de las guías ÷ guías FedEx del tablero
+  const mesesG=new Set(DATA.map(d=>d.mes).filter(Boolean));
+  const mesRef=[...mesesG].sort().pop();
+  const recF=REC.filter(r=>/fedex/i.test(r.oper)&&r.mes===mesRef).length;
+  const guiasF=DATA.filter(d=>d.mes===mesRef).length;
+  if(mesRef&&guiasF){ const t=recF/guiasF*1000; $('rK2').innerHTML=`${nf1.format(t)} <span style="font-size:15px">‰</span>`; $('rK2s').innerHTML=`${nf.format(recF)} reclamos por ${nf.format(guiasF)} guías en ${mesLabel(mesRef)}`; }
+  else { $('rK2').textContent='–'; $('rK2s').textContent='Se calcula con las guías del mes'; }
+  $('rK3').textContent=shortCOP(ind); $('rK3s').textContent=`${nf.format(rows.filter(r=>r.proc==='SI').length)} casos aprobados para pago`;
+  $('rK4').textContent=shortCOP(pag); $('rK4s').innerHTML=ind?`<span class="pill ${pag>=ind*.8?'ok':'warn'}">${nf1.format(pct(pag,ind))}%</span> de lo indemnizable · ${nf.format(pendP)} pagos pendientes`:`${nf.format(pendP)} pagos pendientes`;
+  $('rK5').textContent=nf.format(pendO); $('rK5s').innerHTML=pendO?`<span class="pill bad">${nf1.format(pct(pendO,n))}%</span> sin respuesta del operador`:'<span class="pill ok">Sin pendientes</span>';
+
+  const meses=[...new Set(rows.map(r=>r.mes))].filter(Boolean).sort();
+  const ops=countBy(rows,'oper').map(e=>e[0]); const top=ops.slice(0,5), otros=ops.slice(5);
+  const series=[...top.map((o,i)=>({label:o,data:meses.map(m=>rows.filter(r=>r.mes===m&&r.oper===o).length),backgroundColor:OPCOL[i],borderRadius:4,maxBarThickness:40}))];
+  if(otros.length) series.push({label:'Otros',data:meses.map(m=>rows.filter(r=>r.mes===m&&otros.includes(r.oper)).length),backgroundColor:'#c9cbdb',borderRadius:4,maxBarThickness:40});
+  draw('rcMes',{type:'bar',data:{labels:meses.map(mesLabel),datasets:series},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10}}},scales:{x:{...noGrid,stacked:true},y:{...gridY,stacked:true}}}});
+  hbar('rcMot',countBy(rows,'mot').slice(0,10),'#e34948');
+  const oc=countBy(rows,'oper');
+  draw('rcOper',{type:'bar',data:{labels:oc.map(e=>e[0]),datasets:[{data:oc.map(e=>e[1]),backgroundColor:oc.map((e,i)=>i===0?'#393a70':'#8e90c4'),borderRadius:6,maxBarThickness:22}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.x)} reclamos`,afterLabel:c=>{const o=oc[c.dataIndex][0];const r=rows.filter(x=>x.oper===o);return ` A indemnizar ${shortCOP(r.reduce((s,x)=>s+x.ind,0))} · pagado ${shortCOP(r.reduce((s,x)=>s+x.pag,0))}`;}}}},scales:{x:gridY,y:{...noGrid,ticks:{autoSkip:false}}}}});
+  const donut=(id,e)=>draw(id,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:OPCOL,borderWidth:2,borderColor:'#fff'}]},options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${nf.format(c.parsed)} (${nf1.format(pct(c.parsed,n))}%)`}}}}});
+  const top7=e=>e.length>7?[...e.slice(0,6),['Otros',e.slice(6).reduce((s,x)=>s+x[1],0)]]:e;
+  donut('rcEst',top7(countBy(rows,'estA'))); donut('rcOpEst',top7(countBy(rows,'estO')));
+  draw('rcDin',{type:'bar',data:{labels:meses.map(mesLabel),datasets:[{label:'A indemnizar',data:meses.map(m=>Math.round(rows.filter(r=>r.mes===m).reduce((s,r)=>s+r.ind,0))),backgroundColor:'#8e90c4',borderRadius:4,maxBarThickness:30},{label:'Pagado',data:meses.map(m=>Math.round(rows.filter(r=>r.mes===m).reduce((s,r)=>s+r.pag,0))),backgroundColor:'#393a70',borderRadius:4,maxBarThickness:30}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${nfCOP.format(c.parsed.y)}`}}},scales:{x:noGrid,y:{...gridY,ticks:{callback:v=>shortCOP(v)}}}}});
+  renderEje(rows); renderRecAb(rows);
+}
+function renderEje(rows){
+  const m=new Map(); rows.forEach(r=>{const o=m.get(r.eje)||{eje:r.eje,eq:r.eq,n:0,ind:0,pag:0,ab:0}; o.n++; o.ind+=r.ind; o.pag+=r.pag; if(r.abierto)o.ab++; m.set(r.eje,o);});
+  let list=[...m.values()]; const {k,dir}=ejeSort;
+  list.sort((a,b)=>{const x=a[k],y=b[k]; return typeof x==='string'?dir*x.localeCompare(y,'es'):dir*(x-y);});
+  const cols=[['eje','Ejecutivo'],['n','Reclamos','num'],['ab','Abiertos','num'],['ind','A indemnizar','num'],['pag','Pagado','num']];
+  const arrow=c=>c===k?(dir<0?' ↓':' ↑'):'';
+  $('rtEje').innerHTML=`<thead><tr>${cols.map(([c,l,cl])=>`<th data-k="${c}" class="${cl||''}">${l}${arrow(c)}</th>`).join('')}</tr></thead><tbody>`+
+    list.map(o=>`<tr><td>${esc(o.eje)}<div class="muted small">${esc(o.eq)}</div></td><td class="num"><b>${nf.format(o.n)}</b></td><td class="num">${o.ab?`<span class="pill bad">${o.ab}</span>`:'0'}</td><td class="num">${shortCOP(o.ind)}</td><td class="num">${shortCOP(o.pag)}</td></tr>`).join('')+'</tbody>';
+  $('rtEje').querySelectorAll('th').forEach(th=>th.onclick=()=>{const c=th.dataset.k; ejeSort={k:c,dir:ejeSort.k===c?-ejeSort.dir:(c==='eje'?1:-1)}; renderEje(recFiltered());});
+}
+function renderRecAb(rows){
+  const q=norm($('qRec').value); const today=new Date(); today.setHours(0,0,0,0);
+  let ab=rows.filter(r=>r.abierto);
+  if(q) ab=ab.filter(r=>norm([r.guia,r.cli,r.eje,r.oper,r.mot,r.desc,r.gest,r.estA,r.estO].join(' ')).includes(q));
+  ab.sort((a,b)=>(a.ini||today)-(b.ini||today));
+  const t=$('rtAb');
+  if(!ab.length){ t.innerHTML=`<tbody><tr><td class="empty">${q?'Ningún caso abierto coincide con la búsqueda.':'No hay casos abiertos con los filtros actuales.'}</td></tr></tbody>`; return; }
+  t.innerHTML=`<thead><tr><th>Guía</th><th>Inicio</th><th class="num">Días</th><th>Operador · motivo</th><th>Cliente · ejecutivo</th><th class="num">A indemnizar</th><th>Pendiente</th><th>Última gestión</th></tr></thead><tbody>`+
+    ab.map(r=>{const d=r.ini?Math.round((today-r.ini)/864e5):null; const link=/fedex/i.test(r.oper)&&/^\d{10,}$/.test(r.guia);
+      return `<tr><td>${link?`<a href="https://www.fedex.com/fedextrack/?trknbr=${r.guia}" target="_blank" rel="noopener">${r.guia}</a>`:esc(r.guia)}</td>
+      <td style="white-space:nowrap">${fmtD(r.ini)}</td><td class="num"><span class="pill ${d>30?'bad':'warn'}">${d??'–'}</span></td>
+      <td>${esc(r.oper)}<div class="muted small">${esc(r.mot)}</div></td><td>${esc(r.cli)}<div class="muted small">${esc(r.eje)}</div></td>
+      <td class="num">${r.ind?shortCOP(r.ind):'–'}</td>
+      <td>${r.pendOper?'<span class="pill bad">Operador</span> ':''}${r.pendPago?'<span class="pill warn">Pago</span>':''}<div class="muted small">${esc(r.estA)}</div></td>
+      <td>${esc(r.gest)||'<span class="muted">Sin gestión registrada</span>'}</td></tr>`;}).join('')+'</tbody>';
+}
+async function loadReclamos(){
+  if(!RECLAMOS_URL){ $('recNote').textContent='La sección de reclamaciones se activará cuando se conecte la hoja publicada de reclamaciones.'; $('recNote').classList.add('show'); $('recFilters').hidden=true; return; }
+  try{
+    const r=await fetch(RECLAMOS_URL+(RECLAMOS_URL.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
+    REC=parseReclamos(XLSX.read(await r.arrayBuffer(),{type:'array',cellDates:true}));
+    $('recFilters').hidden=false; $('recNote').classList.remove('show');
+    buildRecFilters(); renderRec();
+  }catch(e){ $('recNote').textContent='No se pudo leer la hoja de reclamaciones. Revisa que siga publicada en la web.'; $('recNote').classList.add('show'); }
+}
+['rOper','rMes','rPais','rMot','rEq'].forEach(id=>$(id).onchange=renderRec);
+$('rReset').onclick=()=>{['rOper','rMes','rPais','rMot','rEq'].forEach(id=>$(id).value='');renderRec();};
+$('qRec').oninput=()=>renderRecAb(recFiltered());
+
 /* ====== Carga ====== */
 function setStatus(cls,txt){ $('dot').className='dot '+cls; $('statusTxt').textContent=txt; }
 function load(wb,origen){
   DATA=parseWorkbook(wb);
   $('loader').classList.add('hide');
   if(!DATA.length){ setStatus('err','No se encontraron guías'); note(HOJA_USADA?`No se encontraron guías en la pestaña “${HOJA_USADA}”. Revisa que conserve la fila de encabezados (Fecha de envío, Número de Guia…).`:`No se encontró la pestaña “${HOJA_DATOS}” en el libro publicado. Revisa el nombre de la pestaña o que el libro completo esté publicado.`); return; }
-  buildFilters(); render();
+  buildFilters(); render(); loadReclamos();
   const now=new Date();
   setStatus('',`${origen} · ${now.toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'})}`);
   $('heroSub').textContent=`${HOJA_USADA} · ${nf.format(DATA.length)} guías movidas por FedEx. Estado, tiempos de tránsito y novedades por asesor y canal.`;
@@ -589,8 +778,8 @@ $('reset').onclick=()=>{['fMes','fCanal','fVend','fEst','fPais'].forEach(id=>$(i
 $('qAb').oninput=()=>renderAbiertas(filtered());
 $('qVend').oninput=()=>renderVend(filtered());
 const b64u=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-async function unlock(pwd){
-  const [salt,iv,ct]=SHEET_ENC.split('.').map(b64u);
+async function unlock(pwd,enc=SHEET_ENC){
+  const [salt,iv,ct]=enc.split('.').map(b64u);
   const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pwd),'PBKDF2',false,['deriveKey']);
   const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
   return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct));
@@ -598,6 +787,7 @@ async function unlock(pwd){
 async function enter(pwd,silent){
   try{
     SHEET_URL=await unlock(pwd);
+    try{ if(!RECLAMOS_ENC.startsWith('__')) RECLAMOS_URL=await unlock(pwd,RECLAMOS_ENC); }catch(e){}
     try{ sessionStorage.setItem('fx_k',pwd); }catch(e){}
     $('gate').hidden=true; $('loader').classList.remove('hide'); fromSheet(); return true;
   }catch(e){ if(!silent){ $('pwdErr').textContent='Clave incorrecta. Verifícala e inténtalo de nuevo.'; $('pwd').select(); } return false; }
