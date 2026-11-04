@@ -211,12 +211,12 @@ footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
 
   <div class="section-title"><h2>Rutas, peso y servicio</h2><span>Origen, destino y carga movida</span></div>
   <div class="grid g3">
-    <div class="card"><h3>Ciudades de origen</h3><p class="hint">Top 10 por número de guías</p><div class="chart"><canvas id="cOrig"></canvas></div></div>
+    <div class="card"><h3 id="tOrig">Ciudades de origen</h3><p class="hint">Top 10 por número de guías</p><div class="chart"><canvas id="cOrig"></canvas></div></div>
     <div class="card"><h3>Ciudades de destino</h3><p class="hint">Top 10 por número de guías</p><div class="chart"><canvas id="cDest"></canvas></div></div>
     <div class="card"><h3>Tipo de servicio</h3><p class="hint">Guías por modalidad registrada</p><div class="chart"><canvas id="cServ"></canvas></div></div>
   </div>
   <div class="grid g2" style="margin-top:14px">
-    <div class="card"><h3 id="tKg">Kilos enviados por día</h3><p class="hint">Peso total despachado según la fecha de envío. Pasa el cursor sobre una barra para ver paquetes y guías de ese día.</p><div class="chart"><canvas id="cKg"></canvas></div></div>
+    <div class="card"><h3>Kilos por canal</h3><p class="hint">Carga movida por cada gerencia. Pasa el cursor para ver paquetes, guías y kilos promedio por guía.</p><div class="chart"><canvas id="cKg"></canvas></div></div>
     <div class="card"><h3>Guías por rango de peso</h3><p class="hint">Cómo se reparte la carga</p><div class="chart"><canvas id="cPeso"></canvas></div></div>
   </div>
 
@@ -279,6 +279,7 @@ const COLS = {
   vend:    h => h==='vendedor' || h==='asesor',
   guia:    h => h.startsWith('numero de guia') || h==='guia',
   estado:  h => h==='estado',
+  estAct:  h => h==='estado actual',
   ref:     h => h.startsWith('referencia'),
   remit:   h => h.startsWith('nombre del remitente'),
   dest:    h => h.startsWith('nombre de contacto'),
@@ -291,7 +292,8 @@ const COLS = {
   peso:    h => h.startsWith('peso'),
   paq:     h => h.includes('paquetes'),
   serv:    h => h.startsWith('tipo servicio') || h.startsWith('tipo de servicio'),
-  actual:  h => h.startsWith('estado guia actual') || h.startsWith('estado actual'),
+  actual:  h => h.startsWith('estado guia actual'),
+  resp:    h => h.startsWith('responsabilidad'),
   noved:   h => h.startsWith('novedades') || h.startsWith('gestion'),
 };
 function mapHeader(row){
@@ -299,17 +301,18 @@ function mapHeader(row){
   hs.forEach((h,i)=>{ for(const k in COLS){ if(map[k]==null && h && COLS[k](h)){ map[k]=i; break; } } });
   return (map.guia!=null && map.envio!=null) ? map : null;
 }
-const CANALES = {'senior':'Senior','televentas':'Televentas','televentas senior':'Televentas','retail estaciones':'Retail Estaciones','retail bogota':'Retail Bogotá','ecuador':'Ecuador','mexico':'México','ecommerce':'Ecommerce'};
+const CANALES = {'retail':'Retail Estaciones','sin canal asignado':'Sin canal asignado','senior':'Senior','televentas':'Televentas','televentas senior':'Televentas','retail estaciones':'Retail Estaciones','retail bogota':'Retail Bogotá','ecuador':'Ecuador','mexico':'México','ecommerce':'Ecommerce'};
 function canalOf(v){ const n=norm(v); return CANALES[n] || (n?titleCase(v):'Sin canal'); }
-function estadoOf(estado,actual){
-  const n=norm(estado)||norm(actual);
-  if(!n) return 'Sin estado';
-  if(n.startsWith('entregado')) return 'Entregada';
+function estadoOf(n){
+  n=norm(n);
+  if(!n) return 'Sin actualizar';
+  if(n.startsWith('entregad')) return 'Entregada';
   if(n.includes('transito')||n.includes('en camino')) return 'En tránsito';
-  if(n.includes('devuel')) return 'Devuelta';
+  if(n.includes('retorn')||n.includes('devuel')) return 'Retorno';
+  if(n.includes('incaut')||n.includes('aprehend')) return 'Incautada';
   if(n.includes('retenid')||n.includes('aduana')||n.includes('inspecc')) return 'Retenida / aduana';
   if(n.includes('novedad')||n.includes('excepc')||n.includes('retraso')) return 'Con novedad';
-  return titleCase(estado||actual);
+  return titleCase(n);
 }
 let HOJA_USADA='';
 function pickSheets(wb){
@@ -320,7 +323,48 @@ function pickSheets(wb){
   if(!s.length && wb.SheetNames.length===1) s=wb.SheetNames.slice();
   return s;
 }
+/* Canal por asesor: 1) lo aprendido en pestañas que sí tienen "Indicación", 2) pestaña COMERCIALES, 3) reglas fijas */
+const ALIAS={mde:'medellin',med:'medellin',bga:'bucaramanga',buc:'bucaramanga',clo:'cali',bog:'bogota',sonya:'sonia'};
+const STOP=new Set(['cea','de','la','el','del','y','pto','venta']);
+const toks=s=>norm(s).replace(/[^a-z0-9ñ ]/g,' ').split(' ').filter(Boolean).map(t=>ALIAS[t]||t).filter(t=>!STOP.has(t));
+function lev1(a,b){ if(Math.abs(a.length-b.length)>1) return false; let i=0,j=0,d=0; while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++d>1) return false; if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} } return d+(a.length-i)+(b.length-j)<=1; }
+const tokEq=(a,b)=>a===b||(a.length>=4&&b.length>=4&&lev1(a,b));
+const score=(A,B)=>A.filter(a=>B.some(b=>tokEq(a,b))).length;
+const FIJOS={ecommerce:'Ecommerce',plus:'Ecommerce',fullfilment:'Ecommerce',fulfillment:'Ecommerce',fullfillment:'Ecommerce'};
+let CANAL_HIST=new Map(), COMERCIALES=[];
+function learnChannels(wb){
+  CANAL_HIST=new Map(); COMERCIALES=[];
+  const votes=new Map();
+  wb.SheetNames.forEach(name=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
+    if(norm(name).startsWith('comercial')){
+      let h=-1; rows.forEach((r,i)=>{ if(h<0 && r.map(norm).includes('asesor')) h=i; });
+      if(h>=0){ const H=rows[h].map(norm), ia=H.indexOf('asesor'), ig=H.indexOf('gerencia'), ip=H.findIndex(x=>x.startsWith('pto')); 
+        rows.slice(h+1).forEach(r=>{ if(r[ia]&&r[ig]) COMERCIALES.push({asesor:toks(r[ia]),pto:ip>=0?toks(r[ip]):[],canal:canalOf(r[ig])}); }); }
+      return;
+    }
+    let map=null;
+    rows.forEach(r=>{ const h=mapHeader(r); if(h){map=h;return;} if(!map||map.canal==null||map.vend==null) return;
+      const v=norm(r[map.vend]), c=String(r[map.canal]||'').trim(); if(!v||!c) return;
+      const m=votes.get(v)||new Map(); const k=canalOf(c); m.set(k,(m.get(k)||0)+1); votes.set(v,m); });
+  });
+  votes.forEach((m,v)=>CANAL_HIST.set(v,[...m.entries()].sort((a,b)=>b[1]-a[1])[0][0]));
+}
+function canalDeAsesor(v){
+  const n=norm(v); if(!n) return 'Sin canal asignado';
+  if(FIJOS[n]) return FIJOS[n];
+  if(CANAL_HIST.has(n)) return CANAL_HIST.get(n);
+  const T=toks(v); let best=null,bs=0,tie=false;
+  const esPunto=n.startsWith('cea');
+  COMERCIALES.forEach(c=>{
+    const sc=esPunto?score(T,c.pto):Math.max(score(T,c.asesor),score(T,c.pto));
+    if(sc>bs){bs=sc;best=c;tie=false;} else if(sc===bs&&sc>0&&best&&best.canal!==c.canal) tie=true;
+  });
+  const need=esPunto?1:Math.min(2,T.length);
+  return (best&&!tie&&bs>=need)?best.canal:'Sin canal asignado';
+}
 function parseWorkbook(wb){
+  learnChannels(wb);
   const byGuide=new Map();
   const hojas=pickSheets(wb); HOJA_USADA=hojas.join(', ');
   hojas.forEach((name,si)=>{
@@ -332,14 +376,14 @@ function parseWorkbook(wb){
       const guia=String(r[map.guia]??'').replace(/\.0+$/,'').replace(/\s/g,'');
       if(!/^\d{8,}$/.test(guia)) return;
       const env=toDate(r[map.envio]), tra=map.transito!=null?toDate(r[map.transito]):null;
-      const est=estadoOf(r[map.estado],r[map.actual]);
+      const est=estadoOf(map.estAct!=null?r[map.estAct]:r[map.estado]);
       const g=v=>map[v]!=null?r[map[v]]:'';
       const num=v=>{const x=parseFloat(String(g(v)).replace(',','.'));return isFinite(x)?x:0;};
       const dias=businessDays(env,tra);
       byGuide.set(guia,{
         guia, env, tra, mes:mesKey(env)||'', est, abierta:est!=='Entregada',
         vend:titleCase(String(g('vend')).trim())||'Sin asesor',
-        canal:canalOf(g('canal')),
+        canal:map.canal!=null&&String(g('canal')).trim()?canalOf(g('canal')):canalDeAsesor(g('vend')),
         ref:String(g('ref')).trim(), remit:String(g('remit')).trim(), dest:String(g('dest')).trim(),
         cOrig:titleCase(String(g('cOrig')).trim()).replace(/^Bogota.*$/i,'Bogotá')||'–',
         pOrig:String(g('pOrig')).trim().toUpperCase()||'–',
@@ -347,7 +391,7 @@ function parseWorkbook(wb){
         pDest:String(g('pDest')).trim().toUpperCase()||'–',
         peso:num('peso'), paq:num('paq')||0,
         serv:String(g('serv')).trim().toUpperCase().replace(/\s*-\s*/g,'-')||'Sin especificar',
-        actual:String(g('actual')).trim(), noved:String(g('noved')).trim(),
+        actual:String(g('actual')).trim(), noved:String(g('noved')).trim(), resp:String(g('resp')).trim(),
         dias, sheet:name, order:si
       });
     });
@@ -357,7 +401,7 @@ function parseWorkbook(wb){
 
 /* ====== Estado ====== */
 let DATA=[], CHARTS={};
-const ST_COLOR={'Entregada':'#393a70','En tránsito':'#fcb614','Con novedad':'#e34948','Retenida / aduana':'#e8833a','Devuelta':'#8e90c4','Sin estado':'#c9cbdb'};
+const ST_COLOR={'Entregada':'#393a70','En tránsito':'#fcb614','Con novedad':'#e34948','Retenida / aduana':'#e8833a','Incautada':'#a0281e','Retorno':'#8e90c4','Sin actualizar':'#c9cbdb'};
 const stColor=s=>ST_COLOR[s]||'#a5a7c9';
 const PAIS={CO:'Colombia',EC:'Ecuador',MX:'México',US:'Estados Unidos'};
 
@@ -429,7 +473,6 @@ function render(){
   const meses=[...new Set(rows.map(kOf))].filter(Boolean).sort();
   const lab=k=>porDia?String(+k.slice(8))+' '+MESES[+k.slice(5,7)-1].slice(0,3):mesLabel(k);
   $('tMes').textContent=porDia?'Guías por día de envío':'Guías por mes de envío';
-  $('tKg').textContent=porDia?'Kilos enviados por día':'Kilos enviados por mes';
   const mE=meses.map(m=>rows.filter(r=>kOf(r)===m&&!r.abierta).length), mA=meses.map(m=>rows.filter(r=>kOf(r)===m&&r.abierta).length);
   draw('cMes',{type:'bar',data:{labels:meses.map(lab),datasets:[{label:'Entregadas',data:mE,backgroundColor:'#393a70',borderRadius:6,maxBarThickness:46},{label:'Abiertas',data:mA,backgroundColor:'#fcb614',borderRadius:6,maxBarThickness:46}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,useBorderRadius:true,borderRadius:3}}},scales:{x:{...noGrid,stacked:true},y:{...gridY,stacked:true}}}});
@@ -440,15 +483,17 @@ function render(){
   renderDias(rows);
 
   // Rutas
-  hbar('cOrig',countBy(rows,'cOrig').slice(0,10),'#393a70');
+  const sinCiudad=rows.every(r=>r.cOrig==='–');
+  $('tOrig').textContent=sinCiudad?'País de origen':'Ciudades de origen';
+  hbar('cOrig',(sinCiudad?countBy(rows.map(r=>({o:PAIS[r.pOrig]||r.pOrig})),'o'):countBy(rows,'cOrig')).slice(0,10),'#393a70');
   hbar('cDest',countBy(rows,'cDest').slice(0,10),'#8e90c4');
   const sv=countBy(rows,'serv').slice(0,8);
   draw('cServ',{type:'doughnut',data:{labels:sv.map(e=>e[0]),datasets:[{data:sv.map(e=>e[1]),backgroundColor:['#393a70','#fcb614','#8e90c4','#1baf7a','#e2729d','#25264f','#e8833a','#c9cbdb'],borderWidth:2,borderColor:'#fff'}]},
     options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,font:{size:11.5}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${nf.format(c.parsed)} (${nf1.format(pct(c.parsed,n))}%)`}}}}});
   const kgM=meses.map(m=>Math.round(rows.filter(r=>kOf(r)===m).reduce((s,r)=>s+r.peso,0))), pqM=meses.map(m=>rows.filter(r=>kOf(r)===m).reduce((s,r)=>s+r.paq,0));
-  const gM=meses.map(m=>rows.filter(r=>kOf(r)===m).length);
-  draw('cKg',{type:'bar',data:{labels:meses.map(lab),datasets:[{label:'Kg',data:kgM,backgroundColor:'#393a70',borderRadius:6,maxBarThickness:46}]},
-    options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.y)} kg`,afterLabel:c=>` ${nf.format(pqM[c.dataIndex])} paquetes · ${nf.format(gM[c.dataIndex])} guías`}}},scales:{x:noGrid,y:{...gridY,title:{display:true,text:'Kilogramos'},ticks:{callback:v=>nf.format(v)}}}}});
+  const kc=[...new Set(rows.map(r=>r.canal))].map(c=>{const r=rows.filter(x=>x.canal===c);return {c,kg:r.reduce((s,x)=>s+x.peso,0),pq:r.reduce((s,x)=>s+x.paq,0),n:r.length};}).sort((a,b)=>b.kg-a.kg);
+  draw('cKg',{type:'bar',data:{labels:kc.map(x=>x.c),datasets:[{data:kc.map(x=>Math.round(x.kg)),backgroundColor:kc.map((x,i)=>i===0?'#393a70':'#8e90c4'),borderRadius:6,maxBarThickness:24}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.x)} kg (${nf1.format(pct(kc[c.dataIndex].kg,kg))}% del total)`,afterLabel:c=>{const x=kc[c.dataIndex];return ` ${nf.format(x.pq)} paquetes · ${nf.format(x.n)} guías · ${nf1.format(x.n?x.kg/x.n:0)} kg por guía`;}}}},scales:{x:{...gridY,title:{display:true,text:'Kilogramos'},ticks:{callback:v=>nf.format(v)}},y:{...noGrid,ticks:{autoSkip:false}}}}});
   const rangos=[['Hasta 1 kg',0,1],['1–5 kg',1,5],['5–20 kg',5,20],['20–50 kg',20,50],['Más de 50 kg',50,1e9]];
   draw('cPeso',{type:'bar',data:{labels:rangos.map(r=>r[0]),datasets:[{data:rangos.map(([,a,b])=>rows.filter(r=>(a===0?r.peso<=b:r.peso>a&&r.peso<=b)).length),backgroundColor:'#393a70',borderRadius:6,maxBarThickness:56}]},
     options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.y)} guías (${nf1.format(pct(c.parsed.y,n))}%)`}}},scales:{x:noGrid,y:gridY}}});
@@ -458,7 +503,7 @@ function renderAbiertas(rows){
   const q=norm($('qAb').value);
   const today=new Date(); today.setHours(0,0,0,0);
   let ab=rows.filter(r=>r.abierta).map(r=>({...r,desde:businessDays(r.env,today)}));
-  if(q) ab=ab.filter(r=>norm([r.guia,r.vend,r.canal,r.cDest,r.cOrig,r.dest,r.remit,r.actual,r.noved,r.est].join(' ')).includes(q));
+  if(q) ab=ab.filter(r=>norm([r.guia,r.vend,r.canal,r.cDest,r.cOrig,r.dest,r.remit,r.actual,r.noved,r.resp,r.est].join(' ')).includes(q));
   ab.sort((a,b)=>(b.desde??0)-(a.desde??0));
   const t=$('tAb');
   if(!ab.length){ t.innerHTML=`<tbody><tr><td class="empty">${q?'Ninguna guía abierta coincide con la búsqueda.':'No hay guías abiertas con los filtros actuales.'}</td></tr></tbody>`; return; }
@@ -471,7 +516,7 @@ function renderAbiertas(rows){
       <td>${esc(r.vend)}<div class="muted small">${esc(r.canal)}</div></td>
       <td style="white-space:nowrap">${esc(r.cOrig)} → ${esc(r.cDest)}<div class="muted small">${r.peso?nf1.format(r.peso)+' kg':''}</div></td>
       <td>${esc(r.actual)||'<span class="muted">–</span>'}</td>
-      <td>${esc(r.noved)||'<span class="muted">Sin gestión registrada</span>'}</td></tr>`).join('')+'</tbody>';
+      <td>${esc(r.noved||r.resp)||'<span class="muted">Sin gestión registrada</span>'}${r.noved&&r.resp?`<div class="muted small">${esc(r.resp)}</div>`:''}</td></tr>`).join('')+'</tbody>';
 }
 
 function renderCanal(rows){
