@@ -243,7 +243,7 @@ footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
     <div class="kpi accent"><div class="label">Reclamos</div><div class="value" id="rK1">–</div><div class="sub" id="rK1s"></div></div>
     <div class="kpi"><div class="label">Tasa FedEx del mes</div><div class="value" id="rK2">–</div><div class="sub" id="rK2s"></div></div>
     <div class="kpi"><div class="label">Valor a indemnizar</div><div class="value money" id="rK3">–</div><div class="sub" id="rK3s"></div></div>
-    <div class="kpi"><div class="label">Valor pagado</div><div class="value money" id="rK4">–</div><div class="sub" id="rK4s"></div></div>
+    <div class="kpi"><div class="label">Valor pagado Ágilex</div><div class="value money" id="rK4">–</div><div class="sub" id="rK4s"></div></div>
     <div class="kpi"><div class="label">Pendientes con operador</div><div class="value" id="rK5">–</div><div class="sub" id="rK5s"></div></div>
   </div>
   <div class="grid g2" style="margin-top:14px">
@@ -256,7 +256,7 @@ footer{color:var(--muted);font-size:12px;padding:10px 0 30px}
     <div class="card"><h3>Estado con el operador</h3><p class="hint">Gestión del reclamo ante FedEx y demás operadores</p><div class="chart"><canvas id="rcOpEst"></canvas></div></div>
   </div>
   <div class="grid g2" style="margin-top:14px">
-    <div class="card"><h3>Dinero por mes</h3><p class="hint">Valor a indemnizar frente a valor pagado (COP)</p><div class="chart"><canvas id="rcDin"></canvas></div></div>
+    <div class="card"><h3>Dinero por mes</h3><p class="hint">Valor a indemnizar de los reclamos del mes frente al total pagado por Ágilex (pestaña Valor pagado Agilex), en COP</p><div class="chart"><canvas id="rcDin"></canvas></div></div>
     <div class="card">
       <div class="toolbar"><div><h3>Reclamos por ejecutivo</h3><p class="hint" style="margin:0">Haz clic en un encabezado para ordenar</p></div></div>
       <div class="tbl-wrap" style="max-height:300px"><table id="rtEje"></table></div>
@@ -635,7 +635,8 @@ const RCOLS={pais:h=>h.startsWith('agilex pais'),ini:h=>h.startsWith('fecha inic
   ind:h=>h==='valor a indemnizar cop',indUsd:h=>h==='valor a indemnizar usd',estA:h=>h.startsWith('estado agilex'),proc:h=>h.startsWith('procede'),estP:h=>h.startsWith('estado de pago'),
   pag:h=>h==='valor pagado',mesPag:h=>h.startsWith('mes de pago'),estO:h=>h==='estado operador',sol:h=>h.startsWith('solucion operador'),gest:h=>h.startsWith('gestion realizada'),act:h=>h.startsWith('fecha actualizacion')};
 function parseReclamos(wb){
-  const name=wb.SheetNames.find(n=>norm(n).startsWith('reporte'))||wb.SheetNames[0];
+  const valid=wb.SheetNames.filter(n=>!norm(n).startsWith('antiguo'));
+  const name=valid.find(n=>norm(n).startsWith('reporte'))||valid[0];
   const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
   const hi=rows.findIndex(r=>r.map(norm).some(h=>h.startsWith('motivo')));
   if(hi<0) return [];
@@ -661,6 +662,21 @@ function parseReclamos(wb){
       gest:String(g('gest')).trim()||String(g('sol')).trim(),act:toDateDM(g('act'))});
   });
   return out;
+}
+/* Pestaña "Valor pagado Agilex": tabla año × mes con el total pagado */
+let PAGADO_MES=new Map();
+function parseValorPagado(wb){
+  PAGADO_MES=new Map();
+  const name=wb.SheetNames.find(n=>norm(n).startsWith('valor pagado')); if(!name) return;
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
+  let cols=null;
+  rows.forEach(r=>{
+    const H=r.map(norm);
+    if(!cols && H.some(h=>MES_IDX[h]!=null)){ cols=H.map(h=>MES_IDX[h]); return; }
+    if(!cols) return;
+    const y=parseInt(String(r[0]).trim()); if(!(y>=2000)) return;
+    cols.forEach((mi,i)=>{ if(mi!=null){ PAGADO_MES.set(`${y}-${String(mi+1).padStart(2,'0')}`,money(r[i])); } });
+  });
 }
 function recFiltered(){
   const f={oper:$('rOper').value,mes:$('rMes').value,pais:$('rPais').value,mot:$('rMot').value,eq:$('rEq').value};
@@ -692,7 +708,19 @@ function renderRec(){
   if(mesRef&&guiasF){ const t=recF/guiasF*1000; $('rK2').innerHTML=`${nf1.format(t)} <span style="font-size:15px">‰</span>`; $('rK2s').innerHTML=`${nf.format(recF)} reclamos por ${nf.format(guiasF)} guías en ${mesLabel(mesRef)}`; }
   else { $('rK2').textContent='–'; $('rK2s').textContent='Se calcula con las guías del mes'; }
   $('rK3').textContent=shortCOP(ind); $('rK3s').textContent=`${nf.format(rows.filter(r=>r.proc==='SI').length)} casos aprobados para pago`;
-  $('rK4').textContent=shortCOP(pag); $('rK4s').innerHTML=ind?`<span class="pill ${pag>=ind*.8?'ok':'warn'}">${nf1.format(pct(pag,ind))}%</span> de lo indemnizable · ${nf.format(pendP)} pagos pendientes`:`${nf.format(pendP)} pagos pendientes`;
+  // Valor pagado: pestaña "Valor pagado Agilex" (total por mes, no se puede separar por operador, equipo ni motivo)
+  const fMes=$('rMes').value;
+  const anios=[...PAGADO_MES.keys()].map(k=>+k.slice(0,4)); const anio=anios.length?Math.max(...anios):null;
+  const mesesConPago=[...PAGADO_MES.entries()].filter(([k,v])=>+k.slice(0,4)===anio&&v>0).map(([k])=>k).sort();
+  let pagT=0, sub='';
+  if(fMes){ pagT=PAGADO_MES.get(fMes)||0; const prev=PAGADO_MES.get(`${+fMes.slice(0,4)-1}${fMes.slice(4)}`);
+    sub=`${mesLabel(fMes)}`+(prev?` · vs. mismo mes año anterior <span class="pill ${pagT<=prev?'ok':'warn'}">${pagT>=prev?'+':''}${nf1.format(pct(pagT-prev,prev))}%</span>`:''); }
+  else if(anio){ pagT=mesesConPago.reduce((s,k)=>s+PAGADO_MES.get(k),0);
+    const ult=mesesConPago[mesesConPago.length-1]; const prev=[...PAGADO_MES.entries()].filter(([k])=>+k.slice(0,4)===anio-1&&k.slice(5)<=(ult||'').slice(5)).reduce((s,[,v])=>s+v,0);
+    sub=ult?`Ene–${cap(MESES[+ult.slice(5)-1].slice(0,3))} ${anio}`+(prev?` · vs. ${anio-1} <span class="pill ${pagT<=prev?'ok':'warn'}">${pagT>=prev?'+':''}${nf1.format(pct(pagT-prev,prev))}%</span>`:''):''; }
+  const otrosF=['rOper','rPais','rMot','rEq'].some(id=>$(id).value);
+  $('rK4').textContent=PAGADO_MES.size?shortCOP(pagT):'–';
+  $('rK4s').innerHTML=PAGADO_MES.size?sub+(otrosF?'<div class="muted small">Total general: este valor no se separa por operador, país, motivo ni equipo</div>':''):'Sin pestaña “Valor pagado Agilex”';
   $('rK5').textContent=nf.format(pendO); $('rK5s').innerHTML=pendO?`<span class="pill bad">${nf1.format(pct(pendO,n))}%</span> sin respuesta del operador`:'<span class="pill ok">Sin pendientes</span>';
 
   const meses=[...new Set(rows.map(r=>r.mes))].filter(Boolean).sort();
@@ -703,11 +731,11 @@ function renderRec(){
   hbar('rcMot',countBy(rows,'mot').slice(0,10),'#e34948');
   const oc=countBy(rows,'oper');
   draw('rcOper',{type:'bar',data:{labels:oc.map(e=>e[0]),datasets:[{data:oc.map(e=>e[1]),backgroundColor:oc.map((e,i)=>i===0?'#393a70':'#8e90c4'),borderRadius:6,maxBarThickness:22}]},
-    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.x)} reclamos`,afterLabel:c=>{const o=oc[c.dataIndex][0];const r=rows.filter(x=>x.oper===o);return ` A indemnizar ${shortCOP(r.reduce((s,x)=>s+x.ind,0))} · pagado ${shortCOP(r.reduce((s,x)=>s+x.pag,0))}`;}}}},scales:{x:gridY,y:{...noGrid,ticks:{autoSkip:false}}}}});
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${nf.format(c.parsed.x)} reclamos`,afterLabel:c=>{const o=oc[c.dataIndex][0];const r=rows.filter(x=>x.oper===o);return ` A indemnizar ${shortCOP(r.reduce((s,x)=>s+x.ind,0))}`;}}}},scales:{x:gridY,y:{...noGrid,ticks:{autoSkip:false}}}}});
   const donut=(id,e)=>draw(id,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:OPCOL,borderWidth:2,borderColor:'#fff'}]},options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,font:{size:11}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${nf.format(c.parsed)} (${nf1.format(pct(c.parsed,n))}%)`}}}}});
   const top7=e=>e.length>7?[...e.slice(0,6),['Otros',e.slice(6).reduce((s,x)=>s+x[1],0)]]:e;
   donut('rcEst',top7(countBy(rows,'estA'))); donut('rcOpEst',top7(countBy(rows,'estO')));
-  draw('rcDin',{type:'bar',data:{labels:meses.map(mesLabel),datasets:[{label:'A indemnizar',data:meses.map(m=>Math.round(rows.filter(r=>r.mes===m).reduce((s,r)=>s+r.ind,0))),backgroundColor:'#8e90c4',borderRadius:4,maxBarThickness:30},{label:'Pagado',data:meses.map(m=>Math.round(rows.filter(r=>r.mes===m).reduce((s,r)=>s+r.pag,0))),backgroundColor:'#393a70',borderRadius:4,maxBarThickness:30}]},
+  draw('rcDin',{type:'bar',data:{labels:meses.map(mesLabel),datasets:[{label:'A indemnizar',data:meses.map(m=>Math.round(rows.filter(r=>r.mes===m).reduce((s,r)=>s+r.ind,0))),backgroundColor:'#8e90c4',borderRadius:4,maxBarThickness:30},{label:'Pagado Ágilex',data:meses.map(m=>Math.round(PAGADO_MES.get(m)||0)),backgroundColor:'#393a70',borderRadius:4,maxBarThickness:30}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${nfCOP.format(c.parsed.y)}`}}},scales:{x:noGrid,y:{...gridY,ticks:{callback:v=>shortCOP(v)}}}}});
   renderEje(rows); renderRecAb(rows);
 }
@@ -715,10 +743,10 @@ function renderEje(rows){
   const m=new Map(); rows.forEach(r=>{const o=m.get(r.eje)||{eje:r.eje,eq:r.eq,n:0,ind:0,pag:0,ab:0}; o.n++; o.ind+=r.ind; o.pag+=r.pag; if(r.abierto)o.ab++; m.set(r.eje,o);});
   let list=[...m.values()]; const {k,dir}=ejeSort;
   list.sort((a,b)=>{const x=a[k],y=b[k]; return typeof x==='string'?dir*x.localeCompare(y,'es'):dir*(x-y);});
-  const cols=[['eje','Ejecutivo'],['n','Reclamos','num'],['ab','Abiertos','num'],['ind','A indemnizar','num'],['pag','Pagado','num']];
+  const cols=[['eje','Ejecutivo'],['n','Reclamos','num'],['ab','Abiertos','num'],['ind','A indemnizar','num']];
   const arrow=c=>c===k?(dir<0?' ↓':' ↑'):'';
   $('rtEje').innerHTML=`<thead><tr>${cols.map(([c,l,cl])=>`<th data-k="${c}" class="${cl||''}">${l}${arrow(c)}</th>`).join('')}</tr></thead><tbody>`+
-    list.map(o=>`<tr><td>${esc(o.eje)}<div class="muted small">${esc(o.eq)}</div></td><td class="num"><b>${nf.format(o.n)}</b></td><td class="num">${o.ab?`<span class="pill bad">${o.ab}</span>`:'0'}</td><td class="num">${shortCOP(o.ind)}</td><td class="num">${shortCOP(o.pag)}</td></tr>`).join('')+'</tbody>';
+    list.map(o=>`<tr><td>${esc(o.eje)}<div class="muted small">${esc(o.eq)}</div></td><td class="num"><b>${nf.format(o.n)}</b></td><td class="num">${o.ab?`<span class="pill bad">${o.ab}</span>`:'0'}</td><td class="num">${shortCOP(o.ind)}</td></tr>`).join('')+'</tbody>';
   $('rtEje').querySelectorAll('th').forEach(th=>th.onclick=()=>{const c=th.dataset.k; ejeSort={k:c,dir:ejeSort.k===c?-ejeSort.dir:(c==='eje'?1:-1)}; renderEje(recFiltered());});
 }
 function renderRecAb(rows){
@@ -741,7 +769,8 @@ async function loadReclamos(){
   if(!RECLAMOS_URL){ $('recNote').textContent='La sección de reclamaciones se activará cuando se conecte la hoja publicada de reclamaciones.'; $('recNote').classList.add('show'); $('recFilters').hidden=true; return; }
   try{
     const r=await fetch(RECLAMOS_URL+(RECLAMOS_URL.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
-    REC=parseReclamos(XLSX.read(await r.arrayBuffer(),{type:'array',cellDates:true}));
+    const wbR=XLSX.read(await r.arrayBuffer(),{type:'array',cellDates:true});
+    REC=parseReclamos(wbR); parseValorPagado(wbR);
     $('recFilters').hidden=false; $('recNote').classList.remove('show');
     buildRecFilters(); renderRec();
   }catch(e){ $('recNote').textContent='No se pudo leer la hoja de reclamaciones. Revisa que siga publicada en la web.'; $('recNote').classList.add('show'); }
